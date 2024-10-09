@@ -1,12 +1,14 @@
 const express = require('express')
-import cors from 'cors'
-import multer from 'multer'
+const cors = require("cors")
+const multer = require("multer")
 const { v4: uuidv4 } = require('uuid');
-import path from 'path'
-import fs from 'fs'
-import { exec } from 'child_process'
+const path = require("path")
+const fs = require("fs")
+const { exec } = require("child_process")
 
 const app = express()
+const PORT = 8181
+
 
 //Cors config
 app.use(cors({
@@ -35,3 +37,78 @@ const storage = multer.diskStorage({
 //instance of multer - middleware
 const upload = multer({storage: storage})
 
+//parse json body
+app.use(express.json()) // Parses incoming JSON request bodies and makes the data accessible via req.body.
+
+//parse form-data
+app.use(express.urlencoded({extended: true})) 
+// Parses URL-encoded form data and makes it accessible via req.body.
+//When extended: true, it allows for rich objects and arrays to be encoded into the URL-encoded format (using the qs library).
+
+//serve static files
+app.use("./uploads", express.static("uploads"))
+// Serves static files (e.g., uploaded files) from the uploads directory, making them accessible through the /uploads URL path.
+
+
+//GET
+app.get("/", (req, res) => {
+    res.status(200)
+        .json({
+            message : "Home Page"
+        })
+})
+
+
+//POST - using multer middleware
+//Converting only single for now at a time
+
+// NOTE : The output path considered - `./uploads/${videoUploadSubFolder}/${videoUploadFinalFolder}/index.m3u8`
+
+app.post("./upload", upload.single('file'), (req, res) => { 
+    const videoUploadSubFolder = "topic1"   //sub-folder after uploads
+    const videoUploadFinalFolder = uuidv4()  //random value generated as unique name
+    const videoPath = req.file.path //directory where the file is uploaded by the user
+    const outputPath = `./uploads/${videoUploadSubFolder}/${videoUploadFinalFolder}`  //directory where the processed/segmented files should be stored
+    const hlsPath = `${outputPath}/index.m3u8`  //file which contains details about the processed/segmentation of the video file
+
+    if(!fs.existsSync(outputPath)){
+        fs.mkdirSync(outputPath, {recursive:true})
+    }
+
+    // ffmpeg command - 
+    // that takes a video file and converts it into an HLS (HTTP Live Streaming) format
+    // Input: The video at videoPath is loaded.
+    // Video and Audio Encoding: The video is encoded using the H.264 codec (libx264) and audio is encoded using the AAC codec.
+    // HLS Segmentation: The video is split into 10-second segments (e.g., segment000.ts, segment001.ts, etc.).
+    // Playlist Creation: A .m3u8 playlist file (at hlsPath) is created, which references all the segments. The player uses this file to stream the video in chunks.
+
+    const ffmpegCommand = 
+        `
+            ffmpeg -i ${videoPath} -codec:v libx264 -codec:a aac -hls_time 10
+            -hls_playlist_type vod -hls_segment_filename "${outputPath}/segment%03d.ts" -start_number 0 ${hlsPath}
+        `;
+        
+    //Running FFMPEG command - to process the uploaded file
+    exec(ffmpegCommand, (error, stdout, stderr) => {
+        if(error){
+            console.log(`exec error : ${error}`);
+        }
+        console.log(`stdout : ${stdout}`);
+        console.log(`stderr : ${stderr}`);
+
+        const videoDetailedIndexURL = `http://localhost:${PORT}/uploads/${videoUploadSubFolder}/${videoUploadFinalFolder}/index.m3u8`
+
+        res.status(201)
+            .json({
+                message : "Video Converted to HLS format",
+                videoDetailedIndexURL : videoDetailedIndexURL,
+                videoUploadFinalFolder : videoUploadFinalFolder
+        })   
+    })
+
+})
+
+
+app.listen(PORT, (error) => {
+    console.log(`App is listening on PORT : ${PORT}`)
+})
