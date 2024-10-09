@@ -64,10 +64,10 @@ app.get("/", (req, res) => {
 
 // NOTE : The output path considered - `./uploads/${videoUploadSubFolder}/${videoUploadFinalFolder}/index.m3u8`
 
-app.post("./upload", upload.single('file'), (req, res) => { 
+app.post("/upload", upload.single('file'), (req, res) => { 
     const videoUploadSubFolder = "topic1"   //sub-folder after uploads
     const videoUploadFinalFolder = uuidv4()  //random value generated as unique name
-    const videoPath = req.file.path //directory where the file is uploaded by the user
+    const uploadedVideoPath = req.file.path //directory where the file is uploaded by the user
     const outputPath = `./uploads/${videoUploadSubFolder}/${videoUploadFinalFolder}`  //directory where the processed/segmented files should be stored
     const hlsPath = `${outputPath}/index.m3u8`  //file which contains details about the processed/segmentation of the video file
 
@@ -75,18 +75,14 @@ app.post("./upload", upload.single('file'), (req, res) => {
         fs.mkdirSync(outputPath, {recursive:true})
     }
 
-    // ffmpeg command - 
+    // ffmpeg command - NOTE : Should be in a single line
     // that takes a video file and converts it into an HLS (HTTP Live Streaming) format
     // Input: The video at videoPath is loaded.
     // Video and Audio Encoding: The video is encoded using the H.264 codec (libx264) and audio is encoded using the AAC codec.
     // HLS Segmentation: The video is split into 10-second segments (e.g., segment000.ts, segment001.ts, etc.).
     // Playlist Creation: A .m3u8 playlist file (at hlsPath) is created, which references all the segments. The player uses this file to stream the video in chunks.
 
-    const ffmpegCommand = 
-        `
-            ffmpeg -i ${videoPath} -codec:v libx264 -codec:a aac -hls_time 10
-            -hls_playlist_type vod -hls_segment_filename "${outputPath}/segment%03d.ts" -start_number 0 ${hlsPath}
-        `;
+    const ffmpegCommand = `ffmpeg -i ${uploadedVideoPath} -codec:v libx264 -codec:a aac -hls_time 10 -hls_playlist_type vod -hls_segment_filename "${outputPath}/segment%03d.ts" -start_number 0 ${hlsPath}`;
         
     //Running FFMPEG command - to process the uploaded file
     exec(ffmpegCommand, (error, stdout, stderr) => {
