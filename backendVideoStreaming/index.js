@@ -7,13 +7,22 @@ const fs = require("fs")
 const { exec } = require("child_process")
 
 const app = express()
-const PORT = 8181
+const PORT = 8000
 
 
 //Cors config
 app.use(cors({
     origin: ["http://localhost:5173"]
 }))
+
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*") // watch it
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Origin, X-Requested-With, Content-Type, Accept"
+    );
+    next()
+  })
 
 
 //Multer
@@ -46,7 +55,9 @@ app.use(express.urlencoded({extended: true}))
 //When extended: true, it allows for rich objects and arrays to be encoded into the URL-encoded format (using the qs library).
 
 //serve static files
-app.use("./uploads", express.static("uploads"))
+app.use("/uploads", express.static("uploads"))
+// OR, app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Serves static files (e.g., uploaded files) from the uploads directory, making them accessible through the /uploads URL path.
 
 
@@ -70,6 +81,8 @@ app.post("/upload", upload.single('file'), (req, res) => {
     const uploadedVideoPath = req.file.path //directory where the file is uploaded by the user
     const outputPath = `./uploads/${videoUploadSubFolder}/${videoUploadFinalFolder}`  //directory where the processed/segmented files should be stored
     const hlsPath = `${outputPath}/index.m3u8`  //file which contains details about the processed/segmentation of the video file
+    
+    console.log("hlsPath : ", hlsPath);
 
     if(!fs.existsSync(outputPath)){
         fs.mkdirSync(outputPath, {recursive:true})
